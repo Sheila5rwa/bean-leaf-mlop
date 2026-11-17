@@ -1,0 +1,15 @@
+# Run several copies of the API behind one load balancer (nginx) for the Locust test:
+#   docker compose up --build --scale api=1   (then 2, then 3)
+# The website is at http://localhost:8080
+services:
+  api:
+    build: .
+    expose: ["7860"]
+    deploy:
+      resources:
+        limits: {cpus: "1.0", memory: 2g}
+  lb:
+    image: nginx:1.27-alpine
+    volumes: ["./nginx.conf:/etc/nginx/nginx.conf:ro"]
+    ports: ["8080:80"]
+    depends_on: [api]

@@ -1,0 +1,7 @@
+.git
+notebook
+locust
+data/uploads
+data/*.db
+**/__pycache__
+*.ipynb

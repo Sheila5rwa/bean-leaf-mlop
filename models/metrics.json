@@ -1,0 +1,39 @@
+{
+  "test": {
+    "accuracy": 0.8906,
+    "loss": 0.2494,
+    "precision": 0.8959,
+    "recall": 0.8913,
+    "f1": 0.889,
+    "roc_auc": 0.9849,
+    "confusion_matrix": [
+      [
+        41,
+        2,
+        0
+      ],
+      [
+        9,
+        32,
+        2
+      ],
+      [
+        0,
+        1,
+        41
+      ]
+    ],
+    "n_samples": 128
+  },
+  "baseline_test": {
+    "accuracy": 0.75,
+    "loss": 0.6197,
+    "precision": 0.7897,
+    "recall": 0.7514,
+    "f1": 0.7326,
+    "roc_auc": 0.9089
+  },
+  "best_dropout": 0.2,
+  "tensorflow_version": "2.21.0",
+  "retrain_count": 0
+}

@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bean Leaf Doctor</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<style>
+  :root{--bg:#f6f7f2;--card:#fff;--ink:#1d2a1f;--muted:#5d6b60;--line:#e2e6dc;--accent:#2f7d32;--warn:#b5651d;--bad:#a23b2a}
+  *{box-sizing:border-box} body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--ink)}
+  header{padding:20px 16px;background:var(--accent);color:#fff}
+  header h1{margin:0;font-size:1.5rem} header p{margin:4px 0 0;opacity:.9}
+  main{max-width:1100px;margin:0 auto;padding:16px;display:grid;gap:16px;grid-template-columns:repeat(auto-fit,minmax(320px,1fr))}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px}
+  .wide{grid-column:1/-1} h2{margin:0 0 10px;font-size:1.1rem}
+  .muted{color:var(--muted);font-size:.9rem} .pill{display:inline-block;padding:4px 10px;border-radius:999px;background:#e8f3e8;color:var(--accent);font-weight:600;font-size:.85rem}
+  .pill.bad{background:#f7e3df;color:var(--bad)}
+  .stats{display:flex;flex-wrap:wrap;gap:12px} .stat{flex:1 1 140px;border:1px solid var(--line);border-radius:10px;padding:10px}
+  .stat b{display:block;font-size:1.3rem}
+  button{background:var(--accent);color:#fff;border:0;border-radius:8px;padding:10px 14px;font-weight:600;cursor:pointer}
+  button:disabled{opacity:.5;cursor:wait} select,input[type=file]{width:100%;margin:6px 0 10px}
+  img#preview{max-width:100%;max-height:220px;border-radius:8px;display:none;margin-top:8px}
+  .result{margin-top:10px;font-size:1.05rem} .bar{height:10px;background:var(--accent);border-radius:5px}
+  table{width:100%;border-collapse:collapse;font-size:.9rem} td,th{padding:6px;border-bottom:1px solid var(--line);text-align:left}
+  .story{font-size:.9rem;color:var(--muted);margin-top:8px}
+</style>
+</head>
+<body>
+<header><h1>🌱 Bean Leaf Doctor</h1><p>Spot bean rust and angular leaf spot early to protect smallholder farm income in Rwanda.</p></header>
+<main>
+  <section class="card wide">
+    <h2>Model up-time</h2>
+    <div class="stats">
+      <div class="stat"><span class="muted">Status</span><b id="status"><span class="pill">…</span></b></div>
+      <div class="stat"><span class="muted">Up-time</span><b id="uptime">…</b></div>
+      <div class="stat"><span class="muted">Predictions served</span><b id="served">…</b></div>
+      <div class="stat"><span class="muted">Container</span><b id="container" style="font-size:.95rem">…</b></div>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>1. Predict one leaf</h2>
+    <p class="muted">Upload a photo of a single bean leaf.</p>
+    <input type="file" id="predictFile" accept="image/*">
+    <button id="predictBtn">Predict</button>
+    <img id="preview" alt="Leaf preview">
+    <div class="result" id="predictResult"></div>
+  </section>
+
+  <section class="card">
+    <h2>2. Model performance (test set)</h2>
+    <table id="metricsTable"><tr><td class="muted">Loading…</td></tr></table>
+  </section>
+
+  <section class="card wide">
+    <h2>3. Data insights</h2>
+    <div style="display:grid;gap:16px;grid-template-columns:repeat(auto-fit,minmax(240px,1fr))">
+      <div><canvas id="chartCounts"></canvas><p class="story">How many training pictures each class has. Roughly balanced, so the model is not biased toward one class.</p></div>
+      <div><canvas id="chartGreen"></canvas><p class="story"><b>Greenness:</b> healthy leaves have the most clearly-green pixels; disease eats away green tissue.</p></div>
+      <div><canvas id="chartLesion"></canvas><p class="story"><b>Lesion colour share:</b> sick leaves have about twice as many brown/yellow pixels as healthy ones, but the two diseases look alike by colour alone.</p></div>
+      <div><canvas id="chartBright"></canvas><p class="story"><b>Brightness:</b> differs a little between classes, but mostly reflects lighting in the field. The model should not rely on it.</p></div>
+    </div>
+  </section>
+
+  <section class="card wide">
+    <h2>4. Upload new data and retrain</h2>
+    <div style="display:grid;gap:16px;grid-template-columns:repeat(auto-fit,minmax(280px,1fr))">
+      <div>
+        <label class="muted">What do these pictures show?</label>
+        <select id="uploadLabel"><option value="healthy">healthy</option><option value="bean_rust">bean_rust</option><option value="angular_leaf_spot">angular_leaf_spot</option></select>
+        <input type="file" id="uploadFiles" accept="image/*" multiple>
+        <button id="uploadBtn">Upload to database</button>
+        <p class="muted" id="uploadResult"></p>
+      </div>
+      <div>
+        <p>Pictures waiting for retraining: <b id="pending">0</b></p>
+        <button id="retrainBtn">Retrain model</button>
+        <p class="muted" id="retrainStatus"></p>
+        <div id="retrainReport"></div>
+      </div>
+    </div>
+  </section>
+</main>
+<script>
+const $ = id => document.getElementById(id);
+const fmt = s => { s=Math.floor(s); const d=Math.floor(s/86400),h=Math.floor(s%86400/3600),m=Math.floor(s%3600/60); return (d?d+'d ':'')+h+'h '+m+'m '+(s%60)+'s'; };
+const pretty = c => c.replace(/_/g,' ');
+const COLORS = {angular_leaf_spot:'#b5651d', bean_rust:'#a23b2a', healthy:'#2f7d32'};
+let upBase = 0, upAt = Date.now();
+
+async function health(){
+  try{ const h = await (await fetch('/health')).json();
+    $('status').innerHTML = h.model_loaded ? '<span class="pill">Online</span>' : '<span class="pill bad">Model missing</span>';
+    upBase = h.uptime_seconds; upAt = Date.now(); $('served').textContent = h.predictions_served; $('container').textContent = h.container;
+  }catch(e){ $('status').innerHTML='<span class="pill bad">Offline</span>'; }
+}
+setInterval(()=>{ $('uptime').textContent = fmt(upBase + (Date.now()-upAt)/1000); }, 1000);
+setInterval(health, 10000); health();
+
+$('predictFile').onchange = e => { const f=e.target.files[0]; if(f){ $('preview').src=URL.createObjectURL(f); $('preview').style.display='block'; $('predictResult').innerHTML=''; } };
+$('predictBtn').onclick = async () => {
+  const f = $('predictFile').files[0]; if(!f){ $('predictResult').textContent='Choose an image first.'; return; }
+  $('predictBtn').disabled = true; $('predictResult').textContent = 'Thinking…';
+  const fd = new FormData(); fd.append('file', f);
+  try{ const r = await fetch('/predict',{method:'POST',body:fd}); const j = await r.json();
+    if(!r.ok) throw new Error(j.detail);
+    let html = `<b style="color:${COLORS[j.label]}">${pretty(j.label)}</b> (${(j.confidence*100).toFixed(1)}% sure)<p class="muted">${j.advice}</p>`;
+    for(const [c,p] of Object.entries(j.probabilities)) html += `<div class="muted">${pretty(c)} ${(p*100).toFixed(1)}%</div><div class="bar" style="width:${Math.max(p*100,1)}%;background:${COLORS[c]}"></div>`;
+    $('predictResult').innerHTML = html; health();
+  }catch(e){ $('predictResult').textContent = 'Error: '+e.message; }
+  $('predictBtn').disabled = false;
+};
+
+async function metrics(){
+  const m = await (await fetch('/metrics')).json(); const t = m.test || {};
+  if(!t.accuracy){ $('metricsTable').innerHTML='<tr><td class="muted">No metrics yet.</td></tr>'; return; }
+  const rows = [['Accuracy',t.accuracy],['Loss',t.loss],['Precision (macro)',t.precision],['Recall (macro)',t.recall],['F1 score (macro)',t.f1],['Test images',t.n_samples],['Times retrained',m.retrain_count||0]];
+  $('metricsTable').innerHTML = rows.map(([k,v])=>`<tr><th>${k}</th><td>${v}</td></tr>`).join('');
+}
+metrics();
+
+function bar(id, title, labels, data, colors){
+  return new Chart($(id), {type:'bar', data:{labels:labels.map(pretty), datasets:[{data, backgroundColor:colors}]},
+    options:{plugins:{legend:{display:false}, title:{display:true,text:title}}, scales:{y:{beginAtZero:true}}}});
+}
+async function insights(){
+  const d = await (await fetch('/insights')).json(); const cls = Object.keys(d.class_counts); const col = cls.map(c=>COLORS[c]);
+  bar('chartCounts','Training images per class', cls, cls.map(c=>d.class_counts[c]), col);
+  const f = k => cls.map(c => d.features[c][k] ? d.features[c][k].mean : 0);
+  bar('chartGreen','Average greenness (share of green pixels)', cls, f('greenness'), col);
+  bar('chartLesion','Average lesion-colour share', cls, f('lesion_share'), col);
+  bar('chartBright','Average brightness (0-255)', cls, f('brightness'), col);
+}
+insights();
+
+async function pending(){ const u = await (await fetch('/uploads')).json(); $('pending').textContent = u.pending; }
+pending();
+$('uploadBtn').onclick = async () => {
+  const files = $('uploadFiles').files; if(!files.length){ $('uploadResult').textContent='Choose one or more images.'; return; }
+  $('uploadBtn').disabled = true; $('uploadResult').textContent = 'Uploading…';
+  const fd = new FormData(); fd.append('label', $('uploadLabel').value); for(const f of files) fd.append('files', f);
+  try{ const r = await fetch('/upload',{method:'POST',body:fd}); const j = await r.json(); if(!r.ok) throw new Error(j.detail);
+    $('uploadResult').textContent = `Saved ${j.saved} picture(s) as "${pretty(j.label)}" in the database.` + (j.rejected.length?` Rejected ${j.rejected.length}.`:'');
+    $('pending').textContent = j.pending_for_retraining;
+  }catch(e){ $('uploadResult').textContent='Error: '+e.message; }
+  $('uploadBtn').disabled = false;
+};
+$('retrainBtn').onclick = async () => {
+  $('retrainBtn').disabled = true;
+  const r = await fetch('/retrain',{method:'POST'}); const j = await r.json();
+  if(!r.ok){ $('retrainStatus').textContent = j.detail; $('retrainBtn').disabled=false; return; }
+  $('retrainStatus').textContent = `Retraining on ${j.images} new picture(s)… this can take a few minutes.`;
+  pollRetrain();
+};
+async function pollRetrain(){
+  const s = await (await fetch('/retrain/status')).json();
+  if(s.status === 'running'){ setTimeout(pollRetrain, 3000); return; }
+  $('retrainBtn').disabled = false; pending(); metrics();
+  if(s.status === 'failed'){ $('retrainStatus').textContent = 'Retraining failed: '+s.error; return; }
+  const r = s.report; if(!r) return;
+  $('retrainStatus').textContent = `Done in ${r.seconds}s. ${r.kept_new_model ? 'New model saved and now in use.' : 'New model was worse, so the old one was kept.'}`;
+  const keys = ['accuracy','loss','precision','recall','f1'];
+  $('retrainReport').innerHTML = '<table><tr><th>Metric</th><th>Before</th><th>After</th></tr>' + keys.map(k=>`<tr><td>${k}</td><td>${r.before[k]??'-'}</td><td>${r.after[k]??'-'}</td></tr>`).join('') + '</table>';
+}
+</script>
+</body>
+</html>

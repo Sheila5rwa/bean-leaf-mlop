@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+.venv/
+data/uploads/
+data/*.db
+models/bean_model_backup_*.keras
+locust/results/*.html
