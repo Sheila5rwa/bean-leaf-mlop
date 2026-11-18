@@ -1,12 +1,13 @@
 # 🌱 Bean Leaf Doctor: an end-to-end ML pipeline
 
-A farmer takes a photo of a bean leaf, and the app says whether it is **healthy**, has **bean rust**, or has **angular leaf spot**, with advice on what to do next. Beans are a staple crop for Rwandan smallholder farmers. Catching these diseases early protects household income. This project continues my *Ascend Rwanda* mission from the Intro to ML summative (economic opportunity).
+A farmer takes a photo of a bean leaf, and the app says whether it is **healthy**, has **bean rust**, or has **angular leaf spot**, with advice on what to do next. Beans are a staple crop for Rwandan smallholder farmers, and catching these diseases early protects household income. This project continues my *Ascend Rwanda* mission from the Intro to ML summative (economic opportunity), this time with image data instead of tables.
 
 | | Link |
 |---|---|
-| 🎥 Video demo | **TODO: YouTube link** |
-| 🌍 Live app | **TODO: Hugging Face Space URL** |
+| 🎥 Video demo | **TODO: paste YouTube link** |
+| 🌍 Live app (Hugging Face Space) | **TODO: paste Space URL** (free CPU quota can pause the Space; if it shows "Paused", click *Restart*, or run the app locally with the steps below) |
 | 📓 Notebook | [`notebook/bean_leaf_disease.ipynb`](notebook/bean_leaf_disease.ipynb) |
+| 💻 Code | https://github.com/Sheila5rwa/bean-leaf-mlop |
 
 ## What the pipeline does
 1. **Data acquisition**: downloads the iBean dataset (Makerere AI Lab, 3 classes, about 1,300 phone photos from East African farms).
@@ -23,9 +24,11 @@ A farmer takes a photo of a bean leaf, and the app says whether it is **healthy*
 | Baseline CNN (no optimisation) | 0.750 | 0.620 | 0.790 | 0.751 | 0.733 | 0.909 |
 | MobileNetV2 transfer learning (optimised) | **0.891** | **0.249** | **0.896** | **0.891** | **0.889** | **0.985** |
 
+Most errors are bean rust and angular leaf spot images being confused with each other (see the confusion matrix in the notebook), since both diseases look alike by colour.
+
 ## Project structure
 ```
-bean-mlop/
+bean-leaf-mlop/
 ├── README.md
 ├── notebook/bean_leaf_disease.ipynb   # preprocessing, training, evaluation, retraining demo
 ├── src/
@@ -36,8 +39,11 @@ bean-mlop/
 ├── api/main.py, api/static/index.html # FastAPI + web dashboard
 ├── data/train/, data/test/            # images by class folder
 ├── models/bean_model.keras (+ .h5, metrics.json)
-├── locust/locustfile.py               # load test
-├── Dockerfile, docker-compose.yml, nginx.conf
+├── locust/
+│   ├── locustfile.py                  # the flood of requests
+│   ├── run_scaling.py                 # runs the test with 1, 2 and 3 API copies
+│   └── results/                       # reports and screenshots
+├── Dockerfile, docker-compose.yml, nginx.conf   # optional Docker setup
 └── requirements.txt
 ```
 
@@ -50,14 +56,24 @@ bean-mlop/
 4. If Colab's TensorFlow version (printed in the first cell) is not 2.21, change `tensorflow-cpu==` in `requirements.txt` to match.
 
 ### 2. Run locally
+Use **Python 3.12** (TensorFlow does not yet support the newest Python versions).
+
+Windows:
 ```bash
-python -m venv .venv && source .venv/bin/activate   # Windows: .venv\Scripts\activate
+py -3.12 -m venv .venv
+.venv\Scripts\activate
 pip install -r requirements.txt
 uvicorn api.main:app --port 7860
 ```
-Open http://localhost:7860 (dashboard) or http://localhost:7860/docs (API docs).
+Mac / Linux:
+```bash
+python3.12 -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+uvicorn api.main:app --port 7860
+```
+Open http://localhost:7860 (dashboard) or http://localhost:7860/docs (API docs). Wait about 30 seconds after starting, while the model loads.
 
-### 3. Run with Docker
+### 3. Optional: run with Docker
 ```bash
 docker build -t bean-mlop .
 docker run -p 7860:7860 bean-mlop
@@ -65,8 +81,8 @@ docker run -p 7860:7860 bean-mlop
 
 ### 4. Deploy to the cloud (Hugging Face Spaces, free)
 1. Create a Space at https://huggingface.co/new-space, choose **Docker → Blank**, hardware **CPU basic (free)**.
-2. Push this repository to the Space (it builds from the `Dockerfile` and serves on port 7860).
-3. Add this block to the very top of the README in the Space:
+2. Upload this repository's `Dockerfile`, `requirements.txt`, `src`, `api`, `models` and `data` folders (it builds from the `Dockerfile` and serves on port 7860).
+3. Put this block at the very top of the README in the Space:
 ```
 ---
 title: Bean Leaf Doctor
@@ -78,23 +94,33 @@ app_port: 7860
 ---
 ```
 
+## How to use the app
+1. **Predict**: choose one leaf photo and click *Predict*. You get the class, the confidence, and advice.
+2. **Upload data**: choose the correct class, select many images, and click *Upload to database*.
+3. **Retrain**: click *Retrain model*. When it finishes (about 30 seconds), a before/after table shows the metrics, and the new model is used immediately if it did not get worse.
+
 ## Flood request simulation (Locust)
-Several copies of the API run behind an nginx load balancer, and Locust sends many prediction requests at once.
+Locust simulates 50 users sending prediction requests at once (a mix of `/predict` with leaf photos and `/health`). The test was repeated with 1, 2 and 3 copies of the API, with each copy limited to one CPU thread, and the users shared evenly between the copies.
+
+**Note:** Docker was not available on my computer, so each copy is a separate `uvicorn` process instead of a Docker container. The test script is `locust/run_scaling.py`. The `docker-compose.yml` and `nginx.conf` files in this repository run the same test with real containers (`docker compose up --build -d --scale api=2`, then `locust -f locust/locustfile.py --host http://localhost:8080 ...`).
+
 ```bash
 pip install -r locust/requirements.txt
-docker compose up --build -d --scale api=1        # then repeat with api=2 and api=3
-locust -f locust/locustfile.py --host http://localhost:8080 --users 50 --spawn-rate 10 \
-       --run-time 1m --headless --csv locust/results/containers_1 --html locust/results/containers_1.html
-docker compose down
+python locust/run_scaling.py
 ```
+Run for 1 minute per setting on a Windows laptop. Full reports: `locust/results/copies_1.html`, `copies_2.html`, `copies_3.html` (screenshots below).
 
-| Containers | Users | Requests/s | Median (ms) | 95th percentile (ms) | Failures |
+| Copies of the API | Users | Requests/s | Median (ms) | 95th percentile (ms) | Failures |
 |---|---|---|---|---|---|
-| 1 | 50 | TODO | | | |
-| 2 | 50 | TODO | | | |
-| 3 | 50 | TODO | | | |
+| 1 | 50 | 8.7 | 3200 | 13000 | 0 of 494 |
+| 2 | 50 | 23.8 | 590 | 2300 | 0 of 1417 |
+| 3 | 50 | 25.4 | 580 | 1400 | 0 of 1516 |
 
-**What it shows:** TODO, for example "with one container, response time grows as requests queue up; adding containers spreads the load, so latency drops and requests per second rise."
+![1 copy](locust/results/copies_1.png)
+![2 copies](locust/results/copies_2.png)
+![3 copies](locust/results/copies_3.png)
+
+**What it shows:** With one copy of the API, 50 users overwhelm the model: requests queue up, the median response takes 3.2 seconds, and the slowest 5% take over 13 seconds. Adding a second copy cuts the median to 0.59 seconds and nearly triples throughput (8.7 to 23.8 requests per second). A third copy gives only a small further gain in throughput (25.4 requests/s) because all the copies share my laptop's CPU cores, but it still lowers the slowest-5% latency from 2.3 to 1.4 seconds. No request failed in any run. This is a typical scaling pattern: big gains from the first extra copy, then diminishing returns once the hardware becomes the limit.
 
 ## Dataset credit
 iBean dataset, Makerere AI Lab, Uganda (MIT License): https://github.com/AI-Lab-Makerere/ibean
