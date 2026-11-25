@@ -5,7 +5,7 @@ A farmer takes a photo of a bean leaf, and the app says whether it is **healthy*
 | | Link |
 |---|---|
 | 🎥 Video demo | **TODO: paste YouTube link** |
-| 🌍 Live app (Hugging Face Space) | **TODO: paste Space URL** (free CPU quota can pause the Space; if it shows "Paused", click *Restart*, or run the app locally with the steps below) |
+| 🌍 Live app (Hugging Face Space) | https://bean-leaf-mlop.onrender.com 
 | 📓 Notebook | [`notebook/bean_leaf_disease.ipynb`](notebook/bean_leaf_disease.ipynb) |
 | 💻 Code | https://github.com/Sheila5rwa/bean-leaf-mlop |
 
