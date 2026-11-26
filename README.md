@@ -5,6 +5,7 @@ A farmer takes a photo of a bean leaf, and the app says whether it is **healthy*
 | | Link |
 |---|---|
 | 🎥 Video demo |(https://youtu.be/C0SIsiU6Oq0?si=Wv4526Whj0NEAKbl) |
+|Retraining demo | https://youtu.be/NwDvsOODnU4?si=CahNiM6fcjbkY4Ar |
 | 🌍 Live app (Render) | https://bean-leaf-mlop.onrender.com 
 | 📓 Notebook | [`notebook/bean_leaf_disease.ipynb`](notebook/bean_leaf_disease.ipynb) |
 | 💻 Code | https://github.com/Sheila5rwa/bean-leaf-mlop |
