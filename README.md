@@ -102,25 +102,19 @@ app_port: 7860
 ## Flood request simulation (Locust)
 Locust simulates 50 users sending prediction requests at once (a mix of `/predict` with leaf photos and `/health`). The test was repeated with 1, 2 and 3 copies of the API, with each copy limited to one CPU thread, and the users shared evenly between the copies.
 
-**Note:** Docker was not available on my computer, so each copy is a separate `uvicorn` process instead of a Docker container. The test script is `locust/run_scaling.py`. The `docker-compose.yml` and `nginx.conf` files in this repository run the same test with real containers (`docker compose up --build -d --scale api=2`, then `locust -f locust/locustfile.py --host http://localhost:8080 ...`).
 
-```bash
-pip install -r locust/requirements.txt
-python locust/run_scaling.py
-```
-Run for 1 minute per setting on a Windows laptop. Full reports: `locust/results/copies_1.html`, `copies_2.html`, `copies_3.html` (screenshots below).
+I ran several Docker containers of the API behind an nginx load balancer, then ran the same Locust test against 1, 2 and 3 containers (1 minute each, on a Windows laptop).
 
-| Copies of the API | Users | Requests/s | Median (ms) | 95th percentile (ms) | Failures |
+    docker compose up --build -d --scale api=1   # then api=2, api=3
+    python -m locust -f locust/locustfile.py --host http://localhost:8080 --users 50 --spawn-rate 10 --run-time 1m --headless --csv locust/results/containers_1 --html locust/results/containers_1.html
+
+| Containers | Users | Requests/s | Median (ms) | 95th percentile (ms) | Failures |
 |---|---|---|---|---|---|
-| 1 | 50 | 8.7 | 3200 | 13000 | 0 of 494 |
-| 2 | 50 | 23.8 | 590 | 2300 | 0 of 1417 |
-| 3 | 50 | 25.4 | 580 | 1400 | 0 of 1516 |
+| 1 | 50 | 3.63 | 12000 | 13000 | 0 of 205 |
+| 2 | 50 | 8.27 | 4000 | 8000 | 0 of 489 |
+| 3 | 50 | 11.13 | 2900 | 6300 | 0 of 659 |
 
-![1 copy](locust/results/copies_1.png)
-![2 copies](locust/results/copies_2.png)
-![3 copies](locust/results/copies_3.png)
-
-**What it shows:** With one copy of the API, 50 users overwhelm the model: requests queue up, the median response takes 3.2 seconds, and the slowest 5% take over 13 seconds. Adding a second copy cuts the median to 0.59 seconds and nearly triples throughput (8.7 to 23.8 requests per second). A third copy gives only a small further gain in throughput (25.4 requests/s) because all the copies share my laptop's CPU cores, but it still lowers the slowest-5% latency from 2.3 to 1.4 seconds. No request failed in any run. This is a typical scaling pattern: big gains from the first extra copy, then diminishing returns once the hardware becomes the limit.
+**What it shows:** With one container, requests queue up and the median response takes 12 seconds. Adding containers spreads the load: with 3 containers the app handles 3x more requests per second and the median response drops to 2.9 seconds. No requests failed in any test.
 
 ## Dataset credit
 iBean dataset, Makerere AI Lab, Uganda (MIT License): https://github.com/AI-Lab-Makerere/ibean
